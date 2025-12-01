@@ -1,7 +1,7 @@
 /*
  * Diffraction at sub-nucleon scale
  * Calculate diffractive cross sections
- * Heikki Mäntysaari <mantysaari@bnl.gov>, 2015-2016
+ * Heikki Mäntysaari <mantysaari@bnl.gov>, 2015-2025
  */
 #include "diffraction.hpp"
 #include <gsl/gsl_monte.h>
@@ -18,7 +18,7 @@
 using namespace std;
 
 #include <complex>
-#include <omp.h>
+
 #include <functional>
 #include <iomanip>
 #include <cstdlib>
@@ -30,7 +30,6 @@ Diffraction::Diffraction(DipoleAmplitude& dipole_, WaveFunction& wavef_)
 {
     dipole=&dipole_;
     wavef=&wavef_;
-    num_of_averages = 1;
     zlimit=0.00000001;
 	MAXR=10*5.068;
     show_vegas_iterations=true;
@@ -204,8 +203,8 @@ std::complex<double> Diffraction::ScatteringAmplitude(double xpom, double Qsqr, 
     int nregions=0, neval=0, fail=0; double integral[2], error[2], prob[2];
     const int nvec = 1; const double epsrel = MCINTACCURACY, epsabs = 0.0;
     const int flags = 0, seed = 0;
-    const int mineval = MCINTPOINTS/10; const int maxeval = 10*MCINTPOINTS;
-    const int nnew = 100000, nmin = 1000; const double flatness = 1.0;
+    const int mineval = MCINTPOINTS/10; const int maxeval = MCINTPOINTS;
+    const int nnew = mineval/20, nmin = 300; const double flatness = 1.0;
     Suave(ndim, ncomp, integrand, &p, nvec, epsrel, epsabs, flags, seed,
         mineval, maxeval, nnew, nmin, flatness,
         NULL, NULL, &nregions, &neval, &fail, integral, error, prob);
@@ -320,9 +319,8 @@ std::complex<double> Diffraction::ScatteringAmplitudeF(
     const int nvec = 1;
     const double epsrel = MCINTACCURACY, epsabs = 0.0;
     const int flags = 0, seed = 0;
-    const int mineval = MCINTPOINTS/10;
-    const int maxeval = 10*MCINTPOINTS;
-    const int nnew = 100000, nmin = 1000; const double flatness = 1.0;
+    const int mineval = MCINTPOINTS/10; const int maxeval = MCINTPOINTS;
+    const int nnew = mineval/20, nmin = 300; const double flatness = 1.0;
     Suave(ndim, ncomp, integrand, &p, nvec, epsrel, epsabs, flags, seed,
         mineval, maxeval, nnew, nmin, flatness,
         NULL, NULL, &nregions, &neval, &fail, integral, error, prob);
@@ -452,7 +450,6 @@ double Diffraction::ScatteringAmplitudeRotationalSymmetryIntegrand(double xpom, 
     // Bessel integrals INCLUDING jacobian
     double delta = std::sqrt(t);
     double bessel = 2.0*M_PI*b*gsl_sf_bessel_J0(b*delta)*2.0*M_PI*r*gsl_sf_bessel_J0((1.0-z)*r*delta);
-    //double bessel=2.0*M_PI*b*2.0*M_PI*r*1.0;
     
     return amp*overlap*bessel;
 }
@@ -472,8 +469,6 @@ double inthelperf_amplitude_rotationalsym_b(double b, void* p)
         cerr << "#R int failed, result " << result << " relerror " << std::abs(error/result) << " b " << b << " t " << par->t << endl;
     
     gsl_integration_workspace_free(w);
-    
-    //cout << "rint at b=" << b << ": " << result << " pm " << error << endl;
     
     return result;
 }
@@ -507,8 +502,6 @@ double inthelperf_amplitude_rotationalsym_r(double lnr, void* p)
     
     gsl_integration_workspace_free(w);
     
-    //cout << "zint at r=" << r << ", b=" << par->b << ": " << result << " pm " << error << endl;
-    
     return r*result;    // r from exp(r) integration
     
 }
@@ -523,10 +516,6 @@ double inthelperf_amplitude_rotationalsym_z(double z, void* p)
 
 // Helpers
 
-void Diffraction::SetNumOfAverages(int n)
-{
-    num_of_averages = n;
-}
 
 DipoleAmplitude
 * Diffraction::GetDipole()
