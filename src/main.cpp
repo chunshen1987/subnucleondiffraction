@@ -31,9 +31,6 @@
 
 using namespace std;
 
-string InfoStr();
-
-
 DipoleAmplitude *amp;
 
 gsl_rng* global_rng;
@@ -55,6 +52,8 @@ enum WAVEF
     DVCS,
     NRQCD
 };
+
+std::string InfoStr(MODE mode);
 
 vector<double> NRQCD_parameters_from_file(int id);
 
@@ -94,26 +93,23 @@ int main(int argc, char* argv[])
     bool ipglasma=false;
     bool periodic_boundary_conditions=false;
 
-    bool only_real_part=false;
-    
     // nrqcd parameters
     double NRQCD_A=0.213;
     double NRQCD_B=-0.0157;
     int NRQCD_param_id = -1; // if >0, use specific parameters from datafile
-    
-    
+
+
     cout << "# SubNucleon Diffraction by H. Mäntysaari <heikki.mantysaari@jyu.fi>, 2015-2024" << endl;
     cout << "# Git version " << g_GIT_SHA1 << " local repo " << g_GIT_LOCAL_CHANGES << " main build " << __DATE__  << " " << __TIME__ << endl; 
     cout << "# Command: ";
     for (int i=1; i<argc; i++)
         cout << argv[i] << " ";
     cout << endl;
-    
+
     if (string(argv[1])=="-help")
     {
         cout << "-Q2, -W, -xp: set kinematics" << endl;
-        cout << "-dipole A [ipglasma,ipglasma_binary,ipsatproton,smoothnuke] [ipglasmafile ipglasmastep (fm), ipsat_proton_width ipsat_proton_quark_width] [fluxtube tunbe_normalization] [com]    com: move origin to Center of Mass (with constituent quark ipsat)" << endl;
-        cout << "-only_real_part: do not compute the imaginary part (replaced by 0)" << endl;
+        cout << "-dipole A [ipglasma,ipglasma_binary,ipsatproton,smoothnuke] [ipglasmafile ipglasmastep (fm), ipsat_proton_width ipsat_proton_quark_width] [fluxtube tube_normalization] [com]    com: move origin to Center of Mass (with constituent quark ipsat)" << endl;
         cout << "-corrections: calculate correction R_g^2(1+\beta^2) as a function of t. Requires rot. sym. dipole amplitude." << endl;
         cout << "-mcintpoints points/auto" << endl;
         cout << "-skewedness: enable skewedness in dipole amplitude" << endl;
@@ -129,14 +125,13 @@ int main(int argc, char* argv[])
         cout << "-nrqcd_parameters A B" << endl;
         cout << "-nrqcd_parameters_from_file" << endl;
         cout << "-periodic_boundary_conditions: use periodic boundary conditions" << endl;
-        cout << "-mcint [miser,vegas]: slect MC integral algorithm" << endl;
-	cout << "-no_t_in_xpom: do not include t dependence in xpom" << endl;
+        cout << "-no_t_in_xpom: do not include t dependence in xpom" << endl;
         return 0;
     }
-    
+
     MODE mode = AMPLITUDE_DT;
-    
-    
+
+
     for (int i=1; i<argc; i++)
     {
         if (string(argv[i])=="-mcintpoints")
@@ -155,8 +150,6 @@ int main(int argc, char* argv[])
             w=StrToReal(argv[i+1]);
         else if (string(argv[i])=="-xp")
             xp=StrToReal(argv[i+1]);
-        else if (string(argv[i])=="-only_real_part")
-            only_real_part=true;
         else if (string(argv[i])=="-wavef")
         {
             if (string(argv[i+1])=="gauslc")
@@ -367,33 +360,17 @@ int main(int argc, char* argv[])
         }
         else if (string(argv[i])=="-periodic_boundary_conditions")
             periodic_boundary_conditions=true;
-        else if (string(argv[i])=="-mcint")
-        {
-            if (string(argv[i+1])=="miser")
-                MCINT = MISER;
-            else if (string(argv[i+1])=="vegas")
-                MCINT = VEGAS;
-            else
-            {
-                cerr << "Unknown MC algorithm " << argv[i+1] << endl;
-                exit(1);
-            }
-
-        }
      else if (string(argv[i]).substr(0,1)=="-")
         {
             cerr << "Unknown parameter " << argv[i] << endl;
             exit(1);
         }
-
     }
 
     if (tlist.size() == 0) {
         for (double t = mint; t < maxt; t += tstep)
             tlist.push_back(t);
     }
-
-
 
     // Initialize global random number generator
     const gsl_rng_type * rngtype;
@@ -410,9 +387,9 @@ int main(int argc, char* argv[])
     {   
         cerr << "Only IPGlasma dipoles support periodic boundary conditions! " << endl;
         exit(1);
-    } 
+    }
 
-    
+
     WaveFunction *wavef;
     if (wavef_model == GAUSLC)
     {
@@ -438,8 +415,6 @@ int main(int argc, char* argv[])
         cout << "# " << *(DVCSPhoton*)wavef << endl;
     }
 
-    
-    
     amp->SetSkewedness(skewedness);
     if (qsfluct_sigma > 0)
     {
@@ -464,25 +439,18 @@ int main(int argc, char* argv[])
     }
 
     amp->InitializeTarget();
-    
-    
 
     Diffraction diff(*amp, *wavef);
     diff.SetMaxR(maxr*5.068);
 
-    diff.ShowVegasIterations(false);
-
-    
-    cout << "# " << InfoStr() << endl;
+    cout << "# " << InfoStr(mode) << endl;
     //cout << "# " << *wavef << endl;
-    
+
     double mp = 0.938;
     double mjpsi = wavef->MesonMass();
 
-    
     if (mode == PRINT_NUCLEUS)
     {
-        
         if (ipglasma)
         {
         double origin[2]={0,0};
@@ -561,16 +529,12 @@ int main(int argc, char* argv[])
     else if (mode == AMPLITUDE_DT)
     {
 
-        if (only_real_part)
-            cout <<"# Note: imaginary part set to 0" << endl;
         if (xp < 0)
             cout << "# Amplitude as a function of t, Q^2=" << Qsqr << ", W=" << w << endl;
         else
             cout << "# Amplitude as a function of t, Q^2=" << Qsqr << ", xp=" << xp << endl;
         cout << "# t  amplitude [GeV^-2] columns: transverse real, transverse imag, longitudinal real, longitudinal imag" << endl;
 
-
-        //for (t=mint; t<=maxt; t+=tstep)
         for (auto t: tlist)
         {
             double xpom;
@@ -581,87 +545,64 @@ int main(int argc, char* argv[])
             if (xpom > 0.04)
             {
                 cerr << "xpom = " << xpom << ", can't do this!" << endl;
-                //continue;
             }
             
             if(auto_mcintpoints)
                 MCINTPOINTS = MCpoints(t);
             
             cout.precision(5);
-            double trans_r = diff.ScatteringAmplitude(xpom, Qsqr, t, T);
-            double trans_i = 0;
-            if (!only_real_part)
-                trans_i = diff.ScatteringAmplitude(xpom, Qsqr, t, T, false); // note: last argument is real_part, false=imag part
-
-            double lng_r = 0;
+            std::complex<double> trans = diff.ScatteringAmplitude(xpom, Qsqr, t, T);
+            std::complex<double> lng(0.0,0.0);
             if (Qsqr > 0)
-                lng_r = diff.ScatteringAmplitude(xpom, Qsqr, t, L);
-            double lng_i = 0;
-            if (Qsqr > 0 and !only_real_part)
-                lng_i = diff.ScatteringAmplitude(xpom, Qsqr, t, L, false);
+                lng = diff.ScatteringAmplitude(xpom, Qsqr, t, L);
 
             cout << t << " ";
             cout.precision(10);
-            cout << trans_r  << " " << trans_i << " " << lng_r << " " << lng_i << endl;
-            
-
-            // Larger t step probably useful at large t
-            /*
-            if (t>0.08)
-                tstep = 0.015;
-            */
-	    ///if (t>=0.15 )
-            ///    tstep = 0.02;
-                
+            cout << trans.real()  << " " << trans.imag() << " " << lng.real() << " " << lng.imag() << endl;
         }
     }
+
     else if (mode == TOTALCROSSSECTION)
     {
         if (xp < 0)
             cout << "# Amplitude as a function of t, Q^2=" << Qsqr << ", W=" << w << endl;
         else
             cout << "# Amplitude as a function of t, Q^2=" << Qsqr << ", xp=" << xp << endl;
-        cout << "# b (GeV^-1)  F  columns: transverse real, transverse imag, longitudinal real, longitudinal imag" << endl;
-
-        double db = maxb / nbperp;              // GeV^-1
-        std::vector<double> blist(nbperp, 0.);
-        for (int ib = 0; ib < nbperp; ib++) {
-            blist[ib] = (ib + 0.5) * db;        // GeV^-1
-        }
-        for (auto b: blist) {
+            
             double xpom;
             if (xp < 0)
-                xpom = (mjpsi*mjpsi+Qsqr+t_in_xpom*t)/(w*w+Qsqr-mp*mp);
+            xpom = (mjpsi*mjpsi+Qsqr+t_in_xpom*t)/(w*w+Qsqr-mp*mp);
             else
-                xpom = xp;
+            xpom = xp;
             if (xpom > 0.04)
             {
                 cerr << "xpom = " << xpom << ", can't do this!" << endl;
-                //continue;
             }
-
-            cout.precision(5);
-            double trans_r = diff.ScatteringAmplitudeF(xpom, Qsqr, b, T);
-            double trans_i = 0.0;
-            // In practice, we found the imaginary part to be very small
-            // compared to the real part, no need to compute
-            //trans_i = diff.ScatteringAmplitudeF(xpom, Qsqr, b, T, false);
-
-            double lng_r = 0;
-            double lng_i = 0;
+            
+        auto data = diff.ComputeTotalCrossSection(xpom, Qsqr, nbperp, maxb);
+        cout << "# Total cross section (transverse): " << data.sigma_T << " nb" << endl;
+        cout << "# Total cross section (longitudinal): " << data.sigma_L << " nb" << endl;
+        cout << "# b (GeV^-1)  F  columns: transverse real, transverse imag, longitudinal real, longitudinal imag, transverse |F|^2, longitudinal |F|^2" << endl;
+        for (int ib=0; ib<nbperp; ++ib) {
+            const double bval = data.b[ib];
+            const std::complex<double>& FT = data.F_T[ib];
+            std::complex<double> FL(0.,0.);
+            double FT_sqr = data.F_T_sqr[ib];
+            double FL_sqr = 0.0;
             if (Qsqr > 0) {
-                lng_r = diff.ScatteringAmplitudeF(xpom, Qsqr, b, L);
-                lng_i = diff.ScatteringAmplitudeF(xpom, Qsqr, b, L, false);
+                FL = data.F_L[ib];
+                FL_sqr = data.F_L_sqr[ib];
             }
-
-            cout << b << " ";
+            cout.precision(5);
+            cout << std::fixed << bval << " ";
             cout.precision(10);
             cout << std::scientific
-                 << trans_r  << " " << trans_i << " "
-                 << lng_r << " " << lng_i << endl;
-
+                 << FT.real() << " " << FT.imag() << " "
+                 << FL.real() << " " << FL.imag() << " "
+                 << FT_sqr << " " << FL_sqr << endl;
         }
     }
+
     else if (mode == CORRECTIONS)
     {
         cout << "# Real part correction" << endl;
@@ -689,10 +630,10 @@ int main(int argc, char* argv[])
             //    tstep=0.1;
         }
     }
-    
+
     else if (mode == F2)
     {
-	    FACTORIZE_ZINT=true;
+        FACTORIZE_ZINT=true;
         cout << "#F2(Qsqr=" << Qsqr << ", xbj=" << xbj << "): light charm tot F_L(light) F_L(charm) F_L(tot)" << endl;
         double orig_x = xbj;
         WaveFunction * photon = new VirtualPhoton();;
@@ -705,8 +646,8 @@ int main(int argc, char* argv[])
         cout << "#Maxr = " << f2.MaxR() << endl;
         // Use the fact that photon-proton cross section is just diffractive amplitude at t=0
         // Note* 4pi, as convention in BoostedGaussian and VirtualPhoton classes are different!!!
-        double xs_t = f2.ScatteringAmplitude(xbj, Qsqr, 0, T);
-        double xs_l = f2.ScatteringAmplitude(xbj, Qsqr, 0, L);
+        double xs_t = f2.ScatteringAmplitude(xbj, Qsqr, 0, T).real();
+        double xs_l = f2.ScatteringAmplitude(xbj, Qsqr, 0, L).real();
         double structurefun = Qsqr/(4.0*SQR(M_PI)*ALPHA_e)*(xs_l+xs_t);
         double fl_light =Qsqr/(4.0*SQR(M_PI)*ALPHA_e)*xs_l;
         
@@ -721,8 +662,8 @@ int main(int argc, char* argv[])
         if (xbj_c < 0.01 or true)
         {
             cout << "# Quarks: " << ((VirtualPhoton*)photon)->GetParamString() << endl;
-            xs_t_c = f2.ScatteringAmplitude(xbj_c, Qsqr, 0, T);
-            xs_l_c = f2.ScatteringAmplitude(xbj_c, Qsqr, 0, L);
+            xs_t_c = f2.ScatteringAmplitude(xbj_c, Qsqr, 0, T).real();
+            xs_l_c = f2.ScatteringAmplitude(xbj_c, Qsqr, 0, L).real();
             structurefun_c = Qsqr/(4.0*SQR(M_PI)*ALPHA_e)*(xs_l_c+xs_t_c);
             fl_c =Qsqr/(4.0*SQR(M_PI)*ALPHA_e)*(xs_l_c);
         }
@@ -737,8 +678,8 @@ int main(int argc, char* argv[])
         if (xbj_b < 0.01 and false)
         {
             cout << "# Quarks: " << ((VirtualPhoton*)photon)->GetParamString() << endl;
-            xs_t_b = f2.ScatteringAmplitude(xbj_b, Qsqr, 0, T);
-            xs_l_b = f2.ScatteringAmplitude(xbj_b, Qsqr, 0, L);
+            xs_t_b = f2.ScatteringAmplitude(xbj_b, Qsqr, 0, T).real();
+            xs_l_b = f2.ScatteringAmplitude(xbj_b, Qsqr, 0, L).real();
             structurefun_b = Qsqr/(4.0*SQR(M_PI)*ALPHA_e)*(xs_l_b+xs_t_b);
             fl_b =Qsqr/(4.0*SQR(M_PI)*ALPHA_e)*(xs_l_c);
         }
@@ -750,40 +691,27 @@ int main(int argc, char* argv[])
     
     
     gsl_rng_free(global_rng);
-
-
-    
     delete amp;
     delete wavef;
-    
 //    if (gd != 0)
 //        delete gd;
-    
 }
 
 
-string InfoStr()
+string InfoStr(MODE mode)
 {
     stringstream info;
-    
-    info << "Parameters: MCINTPOINTS: " << MCINTPOINTS << " ZINT_INTERVALS " << ZINT_INTERVALS << " MCINTACCURACY " << MCINTACCURACY << " ZINT _RELACCURACY " << ZINT_RELACCURACY;
-    info << ". Integration method ";
-    if (MCINT == MISER)
-        info << "MISER";
-    else if (MCINT == VEGAS)
-        info << "VEGAS";
-    else
-        info << "unknown!";
-    
+
+    info << "Parameters: MCINTPOINTS: " << MCINTPOINTS << " ZINT_INTERVALS " << ZINT_INTERVALS << " MCINTACCURACY " << MCINTACCURACY << " ZINT_RELACCURACY " << ZINT_RELACCURACY;
+    info << ". Integration method Suave ";
+
     info << endl << amp->InfoStr();
-    
+
     if (FACTORIZE_ZINT)
         info <<"# z integral factorized";
     else info << "# z integral not factorized";
-    
-    
-    return info.str();
 
+    return info.str();
 }
 
 int MCpoints(double t)
