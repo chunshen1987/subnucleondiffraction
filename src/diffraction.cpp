@@ -168,25 +168,21 @@ std::complex<double> Diffraction::ScatteringAmplitude(double xpom, double Qsqr, 
         double by = b * sin_tb;
         double rx = r * cos_tr;
         double ry = r * sin_tr;
+        
+        
+        // Quark coordinates
+        // Note: as b is the center of the dipole, not the center-of-mass, no z factors here
         double qx, qy, qbarx, qbary;
-        if (fact) {
-            qx = bx + 0.5*rx; qy = by + 0.5*ry;
-            qbarx = bx - 0.5*rx; qbary = by - 0.5*ry;
-        } else {
-            qx = bx + (1.0 - z)*rx; qy = by + (1.0 - z)*ry;
-            qbarx = bx - z*rx; qbary = by - z*ry;
-        }
+        qx = bx + 0.5*rx; qy = by + 0.5*ry;
+        qbarx = bx - 0.5*rx; qbary = by - 0.5*ry;
+
         double x1[2] = {qx,qy}; double x2[2] = {qbarx,qbary};
         std::complex<double> amp = prm->diff->dipole->ComplexAmplitude(prm->xp, x1, x2);
         // Phase factor with momentum transfer delta
         const double delta = std::sqrt(prm->t);
         if (delta > 0) {
-            double phi;
-            if (fact) {
-                phi = b*delta*cos_tb;
-            } else {
-                phi = b*delta*cos_tb - (0.5 - z)*r*delta*cos_tr;
-            }
+            double phi = b*delta*cos_tb - (0.5 - z)*r*delta*cos_tr;
+            
             const std::complex<double> exponent = std::exp(std::complex<double>(0.0, -phi));
             amp *= exponent;
         }
@@ -241,6 +237,8 @@ std::complex<double> Diffraction::ScatteringAmplitudeF(
         SuaveParams* prm = static_cast<SuaveParams*>(ud);
         const double twoPi = 2.0*M_PI;
         const bool fact = prm->factorize;
+
+
         const double umin = std::log(prm->rmin), umax = std::log(prm->rmax);
         const double xr = x[0];
         const double xu = x[1];
@@ -251,8 +249,7 @@ std::complex<double> Diffraction::ScatteringAmplitudeF(
         const double r = std::exp(u);
         const double z = fact ? 0.5 : (prm->zmin + (1.0 - 2.0*prm->zmin) * xz);
         // Common factors
-        // r from Jacobians, 2 as we have written sigma_qq = 2 N
-        double scalar = 2.0 * r; // r from Jacobian (du->dr adds r)
+        double scalar = r; // r from Jacobian (du->dr adds r)
         if (fact) {
             if (prm->diff->wavef->WaveFunctionType() == "NRQCD") {
                 double delta = 0.0; // t=0
@@ -269,15 +266,11 @@ std::complex<double> Diffraction::ScatteringAmplitudeF(
         } else {
             const double inv4pi = 1.0/(4.0*M_PI);
             if (prm->pol == T)
-                scalar *= prm->diff->wavef->PsiSqr_T(prm->Q2, r, z) * inv4pi;
+                scalar *= prm->diff->wavef->PsiSqr_T(prm->Q2, r, z);
             else
-                scalar *= prm->diff->wavef->PsiSqr_L(prm->Q2, r, z) * inv4pi;
+                scalar *= prm->diff->wavef->PsiSqr_L(prm->Q2, r, z);
         }
-        // Recall quark and gluon positions:
-        // Quark: b + zr
-        // Antiquark: b - (1-z) r
-        // If do like Lappi, Mantysaari: set z=1/2 here
-        // Dipole amplitude
+       
         const double cos_tb = std::cos(theta_b_int);
         const double sin_tb = std::sin(theta_b_int);
         const double cos_tr = std::cos(theta_r);
@@ -287,8 +280,7 @@ std::complex<double> Diffraction::ScatteringAmplitudeF(
         double rx = r * cos_tr;
         double ry = r * sin_tr;
         // q and antiq positions
-        // Note my convention is that b is the center of the dipole (geometric center), not center of mass (z weighted)
-        // Consequently I get (0.5-z)r. Delta phase
+        // Note: no off forward phase, instead b is the center-of-mass of the dipole
         double qx = bx + (1. - z) * rx;
         double qy = by + (1. - z) * ry;
         double qbarx = bx - z * rx;
@@ -312,6 +304,12 @@ std::complex<double> Diffraction::ScatteringAmplitudeF(
         return 0;
     };
 
+    if (FACTORIZE_ZINT)
+    {   
+        cerr << "FACTORIZE_ZINT in ScatteringAmplitudeF has not been tested" << endl;
+        exit(1);
+    }
+
     const int ndim = FACTORIZE_ZINT ? 2 : 3;
     const int ncomp = 2; // real, imag
     int nregions=0, neval=0, fail=0;
@@ -321,6 +319,7 @@ std::complex<double> Diffraction::ScatteringAmplitudeF(
     const int flags = 0, seed = 0;
     const int mineval = MCINTPOINTS/10; const int maxeval = MCINTPOINTS;
     const int nnew = mineval/20, nmin = 300; const double flatness = 1.0;
+
     Suave(ndim, ncomp, integrand, &p, nvec, epsrel, epsabs, flags, seed,
         mineval, maxeval, nnew, nmin, flatness,
         NULL, NULL, &nregions, &neval, &fail, integral, error, prob);
